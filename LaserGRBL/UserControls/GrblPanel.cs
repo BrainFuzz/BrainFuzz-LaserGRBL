@@ -10,260 +10,221 @@ using System.Drawing.Drawing2D;
 using System.Windows.Forms;
 using LaserGRBL;
 
-namespace LaserGRBL.UserControls
-{
-	public partial class GrblPanel : UserControl
-	{
-		GrblCore Core;
-		System.Drawing.Bitmap mBitmap;
-		System.Threading.Thread TH;
-		Matrix mLastMatrix;
-		private GPoint mLastWPos;
-		private GPoint mLastMPos;
-		private float mCurF;
-		private float mCurS;
-		private bool mFSTrig;
+namespace LaserGRBL.UserControls {
+  public partial class GrblPanel :UserControl {
+	private GrblCore _GrblCore;
+	private Bitmap _bitMap;
+	private System.Threading.Thread _thread;
+	private Matrix _lastMatrix;
+	private GPoint mLastWPos;
+	private GPoint mLastMPos;
+	private float mCurF;
+	private float mCurS;
+	private bool mFSTrig;
 
-		public GrblPanel()
-		{
-			InitializeComponent();
+	public GrblPanel() {
+	  InitializeComponent();
 
-			SetStyle(ControlStyles.UserPaint, true);
-			SetStyle(ControlStyles.OptimizedDoubleBuffer, true);
-			SetStyle(ControlStyles.AllPaintingInWmPaint, true);
-			SetStyle(ControlStyles.ResizeRedraw, true);
-			mLastWPos = GPoint.Zero;
-			mLastMPos = GPoint.Zero;
+	  SetStyle(ControlStyles.UserPaint, true);
+	  SetStyle(ControlStyles.OptimizedDoubleBuffer, true);
+	  SetStyle(ControlStyles.AllPaintingInWmPaint, true);
+	  SetStyle(ControlStyles.ResizeRedraw, true);
+	  mLastWPos = GPoint.Zero;
+	  mLastMPos = GPoint.Zero;
 
-			forcez = Settings.GetObject("Enale Z Jog Control", false);
-			SettingsForm.SettingsChanged += SettingsForm_SettingsChanged;
-		}
-
-		private void SettingsForm_SettingsChanged(object sender, EventArgs e)
-		{
-			bool newforce = Settings.GetObject("Enale Z Jog Control", false);
-			if (newforce != forcez)
-			{
-				forcez = newforce;
-				Invalidate();
-			}
-		}
-
-		protected override void OnPaintBackground(PaintEventArgs e)
-		{
-			e.Graphics.Clear(ColorScheme.PreviewBackColor);
-		}
-
-		bool forcez = false;
-		protected override void OnPaint(PaintEventArgs e)
-		{
-			try
-			{
-
-
-				if (mBitmap != null)
-					e.Graphics.DrawImage(mBitmap, 0, 0, Width, Height);
-
-				if (Core != null)
-				{
-					PointF p = MachineToDraw(mLastWPos.ToPointF());
-					e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-					e.Graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
-
-					using (Pen px = GetPen(ColorScheme.PreviewCross, 2f))
-					{
-						e.Graphics.DrawLine(px, (int)p.X, (int)p.Y - 5, (int)p.X, (int)p.Y - 5 + 10);
-						e.Graphics.DrawLine(px, (int)p.X - 5, (int)p.Y, (int)p.X - 5 + 10, (int)p.Y);
-					}
-
-					using (Brush b = GetBrush(ColorScheme.PreviewText))
-					{
-						Rectangle r = ClientRectangle;
-						r.Inflate(-5, -5);
-						StringFormat sf = new StringFormat();
-
-						//  II | I
-						// ---------
-						// III | IV
-						GrblFile.CartesianQuadrant q = Core != null && Core.LoadedFile != null ? Core.LoadedFile.Quadrant : GrblFile.CartesianQuadrant.Unknown;
-						sf.Alignment = q == GrblFile.CartesianQuadrant.II || q == GrblFile.CartesianQuadrant.III ? StringAlignment.Near : StringAlignment.Far;
-						sf.LineAlignment = q == GrblFile.CartesianQuadrant.III || q == GrblFile.CartesianQuadrant.IV ? StringAlignment.Far : StringAlignment.Near;
-
-						String position = string.Format("X: {0:0.000} Y: {1:0.000}", Core != null ? mLastMPos.X : 0, Core != null ? mLastMPos.Y : 0);
-
-                        if (Core != null && (mLastWPos.Z != 0 || mLastMPos.Z != 0 || forcez))
-                            position = position + string.Format(" Z: {0:0.000}", mLastMPos.Z);
-
-                        if (Core != null && Core.WorkingOffset != GPoint.Zero)
-							position = position + "\n" + string.Format("X: {0:0.000} Y: {1:0.000}", Core != null ? mLastWPos.X : 0, Core != null ? mLastWPos.Y : 0);
-
-                        if (Core != null && Core.WorkingOffset != GPoint.Zero  && (mLastWPos.Z != 0 || mLastMPos.Z != 0 || forcez))
-                            position = position + string.Format(" Z: {0:0.000}", mLastWPos.Z);
-
-                        if (mCurF != 0 || mCurS != 0 || mFSTrig)
-						{
-							mFSTrig = true;
-							String fs = string.Format("F: {0:00000.##} S: {1:000.##}", Core != null ? mCurF : 0, Core != null ? mCurS : 0);
-							position = position + "\n" + fs;
-						}
-
-						e.Graphics.DrawString(position, Font, b, r, sf);
-					}
-				}
-			}
-			catch (Exception ex)
-			{
-				Logger.LogException("GrblPanel Paint", ex);
-			}
-		}
-
-
-		private Pen GetPen(Color color, float width)
-		{ return new Pen(color, width); }
-
-		private Pen GetPen(Color color)
-		{ return new Pen(color); }
-
-		private Brush GetBrush(Color color)
-		{ return new SolidBrush(color); }
-
-		public void SetComProgram(GrblCore core)
-		{
-			Core = core;
-			Core.OnFileLoading += OnFileLoading;
-			Core.OnFileLoaded += OnFileLoaded;
-		}
-
-		void OnFileLoading(long elapsed, string filename)
-		{
-			AbortCreation();
-		}
-
-		void OnFileLoaded(long elapsed, string filename)
-		{
-			RecreateBMP();
-		}
-
-		public void RecreateBMP()
-		{
-			AbortCreation();
-
-			TH = new System.Threading.Thread(DoTheWork);
-			TH.Name = "GrblPanel Drawing Thread";
-			TH.Start();
-		}
-
-		private void AbortCreation()
-		{
-			if (TH != null)
-			{
-				TH.Abort();
-				TH = null;
-			}
-		}
-
-		protected override void OnSizeChanged(EventArgs e)
-		{
-			base.OnSizeChanged(e);
-			RecreateBMP();
-		}
-
-		private void DoTheWork()
-		{
-			try
-			{
-				Size wSize = Size;
-
-				if (wSize.Width < 1 || wSize.Height < 1)
-					return;
-
-				System.Drawing.Bitmap bmp = new System.Drawing.Bitmap(wSize.Width, wSize.Height);
-				using (System.Drawing.Graphics g = Graphics.FromImage(bmp))
-				{
-					g.SmoothingMode = SmoothingMode.AntiAlias;
-					g.InterpolationMode = InterpolationMode.HighQualityBicubic;
-					g.PixelOffsetMode = PixelOffsetMode.HighQuality;
-					g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
-
-					if (Core != null /*&& Core.HasProgram*/)
-						Core.LoadedFile.DrawOnGraphics(g, wSize);
-
-					mLastMatrix = g.Transform;
-				}
-
-				AssignBMP(bmp);
-			}
-			catch (System.Threading.ThreadAbortException)
-			{
- 				//standard condition for abort and recreation
-			}
-			catch (Exception ex)
-			{
-				Logger.LogException("Drawing Preview", ex);
-			}
-		}
-
-		public PointF MachineToDraw(PointF p)
-		{
-			if (mLastMatrix == null)
-				return p;
-
-			PointF[] pa = new PointF[] { p };
-			mLastMatrix.TransformPoints(pa);
-			return pa[0];
-		}
-
-		public PointF DrawToMachine(PointF p)
-		{
-			if (mLastMatrix == null || !mLastMatrix.IsInvertible)
-				return p;
-
-			Matrix mInvert = mLastMatrix.Clone();
-			mInvert.Invert();
-
-			PointF[] pa = new PointF[] { p };
-			mInvert.TransformPoints(pa);
-
-			return pa[0];
-		}
-
-		private void AssignBMP(System.Drawing.Bitmap bmp)
-		{
-			lock (this)
-			{
-				if (mBitmap != null)
-					mBitmap.Dispose();
-
-				mBitmap = bmp;
-			}
-			Invalidate();
-		}
-
-		public void TimerUpdate()
-		{
-			if (Core != null && (mLastWPos != Core.WorkPosition || mLastMPos != Core.MachinePosition || mCurF != Core.CurrentF || mCurS != Core.CurrentS))
-			{
-				mLastWPos = Core.WorkPosition;
-				mLastMPos = Core.MachinePosition;
-				mCurF = Core.CurrentF;
-				mCurS = Core.CurrentS;
-				Invalidate();
-			}
-		}
-
-
-		internal void OnColorChange()
-		{
-			RecreateBMP();
-		}
-
-		private void GrblPanel_MouseDoubleClick(object sender, MouseEventArgs e)
-		{
-			if (Settings.GetObject("Click N Jog", true))
-			{
-				PointF coord = DrawToMachine(new PointF(e.X, e.Y));
-				Core.BeginJog(coord, e.Button == MouseButtons.Right);
-			}
-		}
+	  forcez = Settings.GetObject("Enale Z Jog Control", false);
+	  SettingsForm.SettingsChanged += SettingsForm_SettingsChanged;
 	}
+
+	private void SettingsForm_SettingsChanged(object sender, EventArgs e) {
+	  bool newforce = Settings.GetObject("Enale Z Jog Control", false);
+	  if (newforce != forcez) {
+		forcez = newforce;
+		Invalidate();
+	  }
+	}
+
+	protected override void OnPaintBackground(PaintEventArgs e) {
+	  e.Graphics.Clear(ColorScheme.PreviewBackColor);
+	}
+
+	bool forcez = false;
+	protected override void OnPaint(PaintEventArgs e) {
+	  try {
+
+
+		if (_bitMap != null)
+		  e.Graphics.DrawImage(_bitMap, 0, 0, Width, Height);
+
+		if (_GrblCore != null) {
+		  PointF point = MachineToDraw(mLastWPos.ToPointF());
+		  e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+		  e.Graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
+
+		  using (Pen pen = GetPen(ColorScheme.PreviewCross, 2f)) {
+			e.Graphics.DrawLine(pen, (int) point.X, (int) point.Y - 5, (int) point.X, (int) point.Y - 5 + 10);
+			e.Graphics.DrawLine(pen, (int) point.X - 5, (int) point.Y, (int) point.X - 5 + 10, (int) point.Y);
+		  }
+
+		  using (Brush brush = GetBrush(ColorScheme.PreviewText)) {
+			Rectangle rectangle = ClientRectangle;
+			rectangle.Inflate(-5, -5);
+			StringFormat stringFormat = new StringFormat();
+
+			//  II | I
+			// ---------
+			// III | IV
+			GrblFile.CartesianQuadrant quadrant = _GrblCore != null && _GrblCore.LoadedFile != null ? _GrblCore.LoadedFile.Quadrant : GrblFile.CartesianQuadrant.Unknown;
+			stringFormat.Alignment = quadrant == GrblFile.CartesianQuadrant.II || quadrant == GrblFile.CartesianQuadrant.III ? StringAlignment.Near : StringAlignment.Far;
+			stringFormat.LineAlignment = quadrant == GrblFile.CartesianQuadrant.III || quadrant == GrblFile.CartesianQuadrant.IV ? StringAlignment.Far : StringAlignment.Near;
+
+			String position = string.Format("X: {0:0.000} Y: {1:0.000}", _GrblCore != null ? mLastMPos.X : 0, _GrblCore != null ? mLastMPos.Y : 0);
+
+			if (_GrblCore != null && (mLastWPos.Z != 0 || mLastMPos.Z != 0 || forcez))
+			  position += string.Format(" Z: {0:0.000}", mLastMPos.Z);
+
+			if (_GrblCore != null && _GrblCore.WorkingOffset != GPoint.Zero)
+			  position = position + "\n" + string.Format("X: {0:0.000} Y: {1:0.000}", _GrblCore != null ? mLastWPos.X : 0, _GrblCore != null ? mLastWPos.Y : 0);
+
+			if (_GrblCore != null && _GrblCore.WorkingOffset != GPoint.Zero && (mLastWPos.Z != 0 || mLastMPos.Z != 0 || forcez))
+			  position += string.Format(" Z: {0:0.000}", mLastWPos.Z);
+
+			if (mCurF != 0 || mCurS != 0 || mFSTrig) {
+			  mFSTrig = true;
+			  String fs = string.Format("F: {0:00000.##} S: {1:000.##}", _GrblCore != null ? mCurF : 0, _GrblCore != null ? mCurS : 0);
+			  position = position + "\n" + fs;
+			}
+
+			e.Graphics.DrawString(position, Font, brush, rectangle, stringFormat);
+		  }
+		}
+	  } catch (Exception ex) {
+		Logger.LogException("GrblPanel Paint", ex);
+	  }
+	}
+
+
+	private Pen GetPen(Color color, float width) { return new Pen(color, width); }
+
+	private Pen GetPen(Color color) { return new Pen(color); }
+
+	private Brush GetBrush(Color color) { return new SolidBrush(color); }
+
+	public void SetComProgram(GrblCore core) {
+	  _GrblCore = core;
+	  _GrblCore.OnFileLoading += OnFileLoading;
+	  _GrblCore.OnFileLoaded += OnFileLoaded;
+	}
+
+	void OnFileLoading(long elapsed, string filename) {
+	  AbortCreation();
+	}
+
+	void OnFileLoaded(long elapsed, string filename) {
+	  RecreateBMP();
+	}
+
+	public void RecreateBMP() {
+	  AbortCreation();
+
+	  _thread = new System.Threading.Thread(DoTheWork);
+	  _thread.Name = "GrblPanel Drawing Thread";
+	  _thread.Start();
+	}
+
+	private void AbortCreation() {
+	  if (_thread != null) {
+		_thread.Abort();
+		_thread = null;
+	  }
+	}
+
+	protected override void OnSizeChanged(EventArgs e) {
+	  base.OnSizeChanged(e);
+	  RecreateBMP();
+	}
+
+	private void DoTheWork() {
+	  try {
+		Size wSize = Size;
+
+		if (wSize.Width < 1 || wSize.Height < 1)
+		  return;
+
+        Bitmap bmp = new Bitmap(wSize.Width, wSize.Height);
+		using (Graphics graphics = Graphics.FromImage(bmp)) {
+		  graphics.SmoothingMode = SmoothingMode.AntiAlias;
+		  graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
+		  graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
+		  graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
+
+		  if (_GrblCore != null /*&& Core.HasProgram*/)
+			_GrblCore.LoadedFile.DrawOnGraphics(graphics, wSize);
+
+		  _lastMatrix = graphics.Transform;
+		}
+
+		AssignBMP(bmp);
+	  } catch (System.Threading.ThreadAbortException) {
+		//standard condition for abort and recreation
+	  } catch (Exception ex) {
+		Logger.LogException("Drawing Preview", ex);
+	  }
+	}
+
+	public PointF MachineToDraw(PointF point) {
+	  if (_lastMatrix == null) {
+		return point;
+	  }
+
+	  PointF[] pointArray = new PointF[] { point };
+	  _lastMatrix.TransformPoints(pointArray);
+	  return pointArray[0];
+	}
+
+	public PointF DrawToMachine(PointF p) {
+	  if (_lastMatrix == null || !_lastMatrix.IsInvertible)
+		return p;
+
+	  Matrix mInvert = _lastMatrix.Clone();
+	  mInvert.Invert();
+
+	  PointF[] pointArray = new PointF[] { p };
+	  mInvert.TransformPoints(pointArray);
+
+	  return pointArray[0];
+	}
+
+	private void AssignBMP(System.Drawing.Bitmap bitmap) {
+	  lock (this) {
+		if (_bitMap != null)
+		  _bitMap.Dispose();
+
+		_bitMap = bitmap;
+	  }
+	  Invalidate();
+	}
+
+	public void TimerUpdate() {
+	  if (_GrblCore != null && (mLastWPos != _GrblCore.WorkPosition || mLastMPos != _GrblCore.MachinePosition || mCurF != _GrblCore.CurrentF || mCurS != _GrblCore.CurrentS)) {
+		mLastWPos = _GrblCore.WorkPosition;
+		mLastMPos = _GrblCore.MachinePosition;
+		mCurF = _GrblCore.CurrentF;
+		mCurS = _GrblCore.CurrentS;
+		Invalidate();
+	  }
+	}
+
+
+	internal void OnColorChange() {
+	  RecreateBMP();
+	}
+
+	private void GrblPanel_MouseDoubleClick(object sender, MouseEventArgs e) {
+	  if (Settings.GetObject("Click N Jog", true)) {
+		PointF coord = DrawToMachine(new PointF(e.X, e.Y));
+		_GrblCore.BeginJog(coord, e.Button == MouseButtons.Right);
+	  }
+	}
+  }
 }

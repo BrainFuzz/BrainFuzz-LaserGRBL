@@ -94,8 +94,8 @@ namespace LaserGRBL
 
 			public TimeSpan AnalyzeCommand(GrblCommand cmd, bool compute, GrblConf conf = null)
 			{
-				bool delete = !cmd.JustBuilt;
-				if (!cmd.JustBuilt) cmd.BuildHelper();
+				bool delete = !cmd.justBuilt;
+				if (!cmd.justBuilt) cmd.BuildHelper();
 
 				UpdateModalsNB(cmd);
 				UpdateWCO(cmd);
@@ -394,7 +394,7 @@ namespace LaserGRBL
 
 			public G2G3Helper(LaserGRBL.GrblCommand.StatePositionBuilder spb, LaserGRBL.GrblCommand cmd)
 			{
-				bool jb = cmd.JustBuilt;
+				bool jb = cmd.justBuilt;
 				if (!jb) cmd.BuildHelper();
 
 				CW = spb.G2;
