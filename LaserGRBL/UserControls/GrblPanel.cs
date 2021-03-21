@@ -151,11 +151,11 @@ namespace LaserGRBL.UserControls {
 		if (wSize.Width < 1 || wSize.Height < 1)
 		  return;
 
-        Bitmap bmp = new Bitmap(wSize.Width, wSize.Height);
+		Bitmap bmp = new Bitmap(wSize.Width, wSize.Height);
 		using (Graphics graphics = Graphics.FromImage(bmp)) {
-		  graphics.SmoothingMode = SmoothingMode.AntiAlias;
+		  graphics.SmoothingMode     = SmoothingMode.AntiAlias;
 		  graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
-		  graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
+		  graphics.PixelOffsetMode   = PixelOffsetMode.HighQuality;
 		  graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
 
 		  if (_GrblCore != null /*&& Core.HasProgram*/)
@@ -195,7 +195,7 @@ namespace LaserGRBL.UserControls {
 	  return pointArray[0];
 	}
 
-	private void AssignBMP(System.Drawing.Bitmap bitmap) {
+	private void AssignBMP(Bitmap bitmap) {
 	  lock (this) {
 		if (_bitMap != null)
 		  _bitMap.Dispose();
@@ -205,12 +205,13 @@ namespace LaserGRBL.UserControls {
 	  Invalidate();
 	}
 
+
 	public void TimerUpdate() {
 	  if (_GrblCore != null && (mLastWPos != _GrblCore.WorkPosition || mLastMPos != _GrblCore.MachinePosition || mCurF != _GrblCore.CurrentF || mCurS != _GrblCore.CurrentS)) {
 		mLastWPos = _GrblCore.WorkPosition;
 		mLastMPos = _GrblCore.MachinePosition;
-		mCurF = _GrblCore.CurrentF;
-		mCurS = _GrblCore.CurrentS;
+		mCurF     = _GrblCore.CurrentF;
+		mCurS     = _GrblCore.CurrentS;
 		Invalidate();
 	  }
 	}

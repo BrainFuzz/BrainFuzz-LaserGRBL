@@ -186,7 +186,7 @@ namespace LaserGRBL
 			this.PB.ProgressStringDecimals = 0;
 			this.PB.Reverse = false;
 			this.PB.Step = 10D;
-			this.PB.ThrowExceprion = false;
+			this.PB.ThrowException = false;
 			this.PB.Value = 0D;
 			// 
 			// BtnOpen

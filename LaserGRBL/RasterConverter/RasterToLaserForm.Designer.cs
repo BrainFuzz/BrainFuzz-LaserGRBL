@@ -787,7 +787,7 @@
 			this.WB.Reverse = true;
 			this.WB.Running = false;
 			this.WB.Step = 1D;
-			this.WB.ThrowExceprion = false;
+			this.WB.ThrowException = false;
 			this.WB.Value = 0D;
 			// 
 			// BtFlipV
